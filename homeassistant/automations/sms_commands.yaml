@@ -1,0 +1,99 @@
+# Automations — Commandes SMS entrantes
+#
+# Permet de piloter Home Assistant en envoyant un SMS à la carte SIM.
+# Le message est reçu sur sms/incoming, puis dispatché par mot-clé.
+#
+# Commandes disponibles (insensibles à la casse) :
+#   STATUS   → répond avec l'état du système
+#   POMPE ON / POMPE OFF → active/désactive la pompe aquarium
+#   LUMIERES ON / LUMIERES OFF → allume/éteint les lumières
+
+- id: sms_command_dispatcher
+  alias: "SMS — Dispatcher commandes entrantes"
+  description: "Écoute sms/incoming et exécute la commande reçue"
+  trigger:
+    - platform: mqtt
+      topic: "sms/incoming"
+  variables:
+    sender: "{{ trigger.payload_json.sender }}"
+    cmd: "{{ trigger.payload_json.message | trim | upper }}"
+  action:
+    - choose:
+
+        # ── STATUS ──────────────────────────────────────────────────────────
+        - conditions:
+            - condition: template
+              value_template: "{{ cmd == 'STATUS' }}"
+          sequence:
+            - action: script.send_sms
+              data:
+                recipient: "{{ sender }}"
+                message: >-
+                  HA OK — {{ now().strftime('%d/%m %H:%M') }}
+                  pH: {{ states('sensor.aquarium_ph') }}
+                  Temp: {{ states('sensor.aquarium_temperature') }} °C
+                  Pompe: {{ states('switch.pompe_aquarium') }}
+
+        # ── POMPE ON ────────────────────────────────────────────────────────
+        - conditions:
+            - condition: template
+              value_template: "{{ cmd == 'POMPE ON' }}"
+          sequence:
+            - action: switch.turn_on
+              target:
+                entity_id: switch.pompe_aquarium
+            - action: script.send_sms
+              data:
+                recipient: "{{ sender }}"
+                message: "✅ Pompe aquarium allumée."
+
+        # ── POMPE OFF ───────────────────────────────────────────────────────
+        - conditions:
+            - condition: template
+              value_template: "{{ cmd == 'POMPE OFF' }}"
+          sequence:
+            - action: switch.turn_off
+              target:
+                entity_id: switch.pompe_aquarium
+            - action: script.send_sms
+              data:
+                recipient: "{{ sender }}"
+                message: "✅ Pompe aquarium éteinte."
+
+        # ── LUMIERES ON ─────────────────────────────────────────────────────
+        - conditions:
+            - condition: template
+              value_template: "{{ cmd == 'LUMIERES ON' }}"
+          sequence:
+            - action: light.turn_on
+              target:
+                entity_id: light.aquarium
+            - action: script.send_sms
+              data:
+                recipient: "{{ sender }}"
+                message: "✅ Lumières aquarium allumées."
+
+        # ── LUMIERES OFF ────────────────────────────────────────────────────
+        - conditions:
+            - condition: template
+              value_template: "{{ cmd == 'LUMIERES OFF' }}"
+          sequence:
+            - action: light.turn_off
+              target:
+                entity_id: light.aquarium
+            - action: script.send_sms
+              data:
+                recipient: "{{ sender }}"
+                message: "✅ Lumières aquarium éteintes."
+
+        # ── Commande inconnue ────────────────────────────────────────────────
+        default:
+          - action: script.send_sms
+            data:
+              recipient: "{{ sender }}"
+              message: >-
+                Commande inconnue : "{{ trigger.payload_json.message }}"
+                Commandes : STATUS | POMPE ON/OFF | LUMIERES ON/OFF
+
+  mode: queued
+  max: 5

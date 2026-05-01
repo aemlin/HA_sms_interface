@@ -1,0 +1,78 @@
+# SMS Gateway — Home Assistant package
+#
+# Installation:
+#   Ajouter dans configuration.yaml :
+#     homeassistant:
+#       packages:
+#         sms_gateway: !include packages/sms_gateway.yaml
+#
+# Pré-requis : intégration MQTT configurée via Paramètres → Intégrations → MQTT
+
+# ---------------------------------------------------------------------------
+# Capteurs MQTT — état de la passerelle
+# ---------------------------------------------------------------------------
+mqtt:
+  sensor:
+    - name: "SMS Gateway État"
+      unique_id: sms_gateway_state
+      state_topic: "sms/status"
+      value_template: "{{ value_json.state }}"
+      icon: mdi:cellphone-wireless
+      availability:
+        - topic: "sms/status"
+          payload_available: '{"state":"online"}'
+          value_template: "{{ value_json.state }}"
+
+    - name: "SMS Gateway RSSI"
+      unique_id: sms_gateway_rssi
+      state_topic: "sms/status"
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: "dBm"
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:signal
+
+    - name: "SMS Gateway Uptime"
+      unique_id: sms_gateway_uptime
+      state_topic: "sms/status"
+      value_template: "{{ value_json.uptime_s }}"
+      unit_of_measurement: "s"
+      icon: mdi:timer-outline
+
+    - name: "Dernier SMS — Expéditeur"
+      unique_id: sms_last_sender
+      state_topic: "sms/incoming"
+      value_template: "{{ value_json.sender }}"
+      icon: mdi:phone-incoming
+
+    - name: "Dernier SMS — Message"
+      unique_id: sms_last_message
+      state_topic: "sms/incoming"
+      value_template: "{{ value_json.message }}"
+      icon: mdi:message-text
+
+# ---------------------------------------------------------------------------
+# Script réutilisable — envoyer un SMS depuis n'importe quelle automation
+# ---------------------------------------------------------------------------
+script:
+  send_sms:
+    alias: "Envoyer un SMS"
+    description: "Publie sur sms/send pour déclencher l'envoi via la passerelle LilyGO"
+    fields:
+      recipient:
+        description: "Numéro de téléphone (format international)"
+        example: "+32499000000"
+        selector:
+          text:
+      message:
+        description: "Texte du SMS (max 160 caractères)"
+        example: "Alerte : pH trop bas !"
+        selector:
+          text:
+            multiline: true
+    sequence:
+      - action: mqtt.publish
+        data:
+          topic: "sms/send"
+          payload: >-
+            {"recipient": "{{ recipient }}", "message": "{{ message }}"}

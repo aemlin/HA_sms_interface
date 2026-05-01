@@ -1,0 +1,109 @@
+# Automations — Alertes aquarium par SMS
+#
+# Installation :
+#   Copier ce fichier dans votre répertoire config/ HA et inclure dans automations.yaml :
+#     - !include automations/sms_alerts.yaml
+#   Ou importer depuis l'UI : Paramètres → Automations → Importer.
+#
+# Adapter les entity_id à vos capteurs réels et le numéro de téléphone.
+
+# ---------------------------------------------------------------------------
+# pH trop bas
+# ---------------------------------------------------------------------------
+- id: sms_alert_ph_low
+  alias: "SMS — Alerte pH bas aquarium"
+  description: "Envoie un SMS si le pH descend sous 6.5"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aquarium_ph
+      below: 6.5
+      for:
+        minutes: 5  # évite les faux positifs sur un pic bref
+  condition:
+    - condition: state
+      entity_id: sensor.sms_gateway_etat
+      state: "online"
+  action:
+    - action: script.send_sms
+      data:
+        recipient: "+32499000000"
+        message: >-
+          ⚠️ Aquarium — pH BAS : {{ states('sensor.aquarium_ph') }}
+          (seuil : 6.5) — {{ now().strftime('%H:%M') }}
+  mode: single
+
+# ---------------------------------------------------------------------------
+# pH trop haut
+# ---------------------------------------------------------------------------
+- id: sms_alert_ph_high
+  alias: "SMS — Alerte pH haut aquarium"
+  description: "Envoie un SMS si le pH dépasse 8.0"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aquarium_ph
+      above: 8.0
+      for:
+        minutes: 5
+  condition:
+    - condition: state
+      entity_id: sensor.sms_gateway_etat
+      state: "online"
+  action:
+    - action: script.send_sms
+      data:
+        recipient: "+32499000000"
+        message: >-
+          ⚠️ Aquarium — pH HAUT : {{ states('sensor.aquarium_ph') }}
+          (seuil : 8.0) — {{ now().strftime('%H:%M') }}
+  mode: single
+
+# ---------------------------------------------------------------------------
+# Température hors plage
+# ---------------------------------------------------------------------------
+- id: sms_alert_temp_aquarium
+  alias: "SMS — Alerte température aquarium"
+  description: "Envoie un SMS si la température sort de la plage 24–28 °C"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aquarium_temperature
+      below: 24
+      for:
+        minutes: 10
+    - platform: numeric_state
+      entity_id: sensor.aquarium_temperature
+      above: 28
+      for:
+        minutes: 10
+  condition:
+    - condition: state
+      entity_id: sensor.sms_gateway_etat
+      state: "online"
+  action:
+    - action: script.send_sms
+      data:
+        recipient: "+32499000000"
+        message: >-
+          ⚠️ Aquarium — Température : {{ states('sensor.aquarium_temperature') }} °C
+          (plage : 24–28 °C) — {{ now().strftime('%H:%M') }}
+  mode: single
+
+# ---------------------------------------------------------------------------
+# Passerelle SMS hors ligne
+# ---------------------------------------------------------------------------
+- id: sms_gateway_offline_notify
+  alias: "SMS Gateway — Notification hors ligne"
+  description: "Alerte HA (notification interne) si la passerelle passe offline"
+  trigger:
+    - platform: state
+      entity_id: sensor.sms_gateway_etat
+      to: "offline"
+      for:
+        minutes: 2
+  action:
+    - action: notify.persistent_notification
+      data:
+        title: "SMS Gateway hors ligne"
+        message: >-
+          La passerelle LilyGO ne répond plus depuis 2 minutes.
+          Dernier RSSI : {{ states('sensor.sms_gateway_rssi') }} dBm.
+  mode: single
