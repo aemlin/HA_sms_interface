@@ -1,37 +1,59 @@
 #include <unity.h>
-#include <Arduino.h>
+#include <string>
+
+void setUp(void) {}
+void tearDown(void) {}
+#include <algorithm>
+#include <cctype>
 
 // ---------------------------------------------------------------------------
 // SMS parser utility under test
-// Simulates parsing of AT+CMGR raw modem responses
+// Simulates parsing of AT+CMGR raw modem responses — no hardware dependency
 // ---------------------------------------------------------------------------
 
 struct SmsMessage {
-    String sender;
-    String timestamp;
-    String body;
+    std::string sender;
+    std::string timestamp;
+    std::string body;
 };
 
-static bool parseAtCmgr(const String& raw, SmsMessage& out) {
+static void trimStr(std::string& s) {
+    s.erase(s.begin(),
+            std::find_if(s.begin(), s.end(),
+                         [](unsigned char c) { return !std::isspace(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(),
+                         [](unsigned char c) { return !std::isspace(c); }).base(),
+            s.end());
+}
+
+static bool parseAtCmgr(const std::string& raw, SmsMessage& out) {
     // Expected format:
     // +CMGR: "REC UNREAD","+32499000000",,"26/04/30,10:00:00+04"\r\nHello World
-    int headerEnd = raw.indexOf('\n');
-    if (headerEnd < 0) return false;
+    size_t headerEnd = raw.find('\n');
+    if (headerEnd == std::string::npos) return false;
 
-    String header = raw.substring(0, headerEnd);
-    String body   = raw.substring(headerEnd + 1);
-    body.trim();
+    std::string header = raw.substr(0, headerEnd);
+    std::string body   = raw.substr(headerEnd + 1);
+    trimStr(body);
 
     // Extract sender between second and third quote pair
-    int q1 = header.indexOf('"', header.indexOf(',') + 1);
-    int q2 = header.indexOf('"', q1 + 1);
-    if (q1 < 0 || q2 < 0) return false;
-    out.sender = header.substring(q1 + 1, q2);
+    size_t comma1 = header.find(',');
+    if (comma1 == std::string::npos) return false;
+
+    size_t q1 = header.find('"', comma1 + 1);
+    if (q1 == std::string::npos) return false;
+    size_t q2 = header.find('"', q1 + 1);
+    if (q2 == std::string::npos) return false;
+    out.sender = header.substr(q1 + 1, q2 - q1 - 1);
 
     // Extract timestamp (last quoted field)
-    int q3 = header.lastIndexOf('"');
-    int q4 = header.lastIndexOf('"', q3 - 1);
-    out.timestamp = (q4 >= 0 && q3 > q4) ? header.substring(q4 + 1, q3) : "";
+    size_t q3 = header.rfind('"');
+    size_t q4 = (q3 != std::string::npos && q3 > 0)
+                    ? header.rfind('"', q3 - 1)
+                    : std::string::npos;
+    out.timestamp = (q4 != std::string::npos && q3 > q4)
+                        ? header.substr(q4 + 1, q3 - q4 - 1)
+                        : "";
 
     out.body = body;
     return out.sender.length() > 0 && out.body.length() > 0;
@@ -42,7 +64,9 @@ static bool parseAtCmgr(const String& raw, SmsMessage& out) {
 // ---------------------------------------------------------------------------
 
 void test_parse_valid_cmgr() {
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\nHello World";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n"
+        "Hello World";
     SmsMessage msg;
     TEST_ASSERT_TRUE(parseAtCmgr(raw, msg));
     TEST_ASSERT_EQUAL_STRING("+32499000000", msg.sender.c_str());
@@ -50,50 +74,60 @@ void test_parse_valid_cmgr() {
 }
 
 void test_parse_empty_body_fails() {
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n";
     SmsMessage msg;
     TEST_ASSERT_FALSE(parseAtCmgr(raw, msg));
 }
 
 void test_parse_no_newline_fails() {
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"";
     SmsMessage msg;
     TEST_ASSERT_FALSE(parseAtCmgr(raw, msg));
 }
 
 void test_parse_multiline_body() {
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\nLine1\nLine2";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n"
+        "Line1\nLine2";
     SmsMessage msg;
     TEST_ASSERT_TRUE(parseAtCmgr(raw, msg));
     // body captures first line only in this simplified parser
-    TEST_ASSERT_TRUE(msg.body.startsWith("Line1"));
+    TEST_ASSERT_TRUE(msg.body.rfind("Line1", 0) == 0);
 }
 
 void test_parse_timestamp_extracted() {
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\nHello";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n"
+        "Hello";
     SmsMessage msg;
     TEST_ASSERT_TRUE(parseAtCmgr(raw, msg));
     TEST_ASSERT_EQUAL_STRING("26/04/30,10:00:00+04", msg.timestamp.c_str());
 }
 
 void test_parse_local_number() {
-    // Number without international + prefix
-    String raw = "+CMGR: \"REC UNREAD\",\"0499000000\",,\"26/04/30,10:00:00+04\"\nTest";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"0499000000\",,\"26/04/30,10:00:00+04\"\nTest";
     SmsMessage msg;
     TEST_ASSERT_TRUE(parseAtCmgr(raw, msg));
     TEST_ASSERT_EQUAL_STRING("0499000000", msg.sender.c_str());
 }
 
 void test_parse_long_body() {
-    String body(200, 'A'); // 200-character message
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n" + body;
+    std::string body(200, 'A');
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n"
+        + body;
     SmsMessage msg;
     TEST_ASSERT_TRUE(parseAtCmgr(raw, msg));
     TEST_ASSERT_EQUAL_INT(200, (int)msg.body.length());
 }
 
 void test_parse_body_with_special_chars() {
-    String raw = "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\npH: 6.8 / temp: 25.3C";
+    std::string raw =
+        "+CMGR: \"REC UNREAD\",\"+32499000000\",,\"26/04/30,10:00:00+04\"\n"
+        "pH: 6.8 / temp: 25.3C";
     SmsMessage msg;
     TEST_ASSERT_TRUE(parseAtCmgr(raw, msg));
     TEST_ASSERT_EQUAL_STRING("pH: 6.8 / temp: 25.3C", msg.body.c_str());
