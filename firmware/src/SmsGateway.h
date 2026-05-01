@@ -2,6 +2,7 @@
 
 #include "ModemManager.h"
 #include "MqttManager.h"
+#include "OtaManager.h"
 
 class SmsGateway {
 public:
@@ -11,6 +12,7 @@ public:
 private:
     ModemManager _modem;
     MqttManager  _mqtt;
+    OtaManager   _ota;
 
     unsigned long _lastHeartbeat = 0;
 

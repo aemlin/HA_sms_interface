@@ -11,12 +11,14 @@ void SmsGateway::begin() {
         _onMqttSendCommand(recipient, msg);
     });
 
-    // WiFi + MQTT must be up before the modem publishes its first heartbeat
+    // WiFi + MQTT must be up before OTA and modem start
     _mqtt.begin();
+    _ota.begin(OTA_HOSTNAME, OTA_PASSWORD);
     _modem.begin();
 }
 
 void SmsGateway::loop() {
+    _ota.loop();   // highest priority — handle OTA before anything else
     _mqtt.loop();
     _modem.loop();
     _publishHeartbeat();

@@ -73,3 +73,11 @@
 
 // How often to attempt MQTT reconnect (ms)
 #define MQTT_RECONNECT_MS 5000UL
+
+// OTA (Over-The-Air update via WiFi)
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD ""          // empty = no auth (not recommended)
+#endif
+#ifndef OTA_HOSTNAME
+#define OTA_HOSTNAME MQTT_CLIENT_ID
+#endif
