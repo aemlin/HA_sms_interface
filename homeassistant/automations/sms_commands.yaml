@@ -17,7 +17,7 @@
   condition:
     - condition: template
       value_template: >-
-        {{ trigger.payload_json.sender in ['+32456535814'] }}
+        {{ trigger.payload_json.sender in ['+32476417968'] }}
   variables:
     sender: "{{ trigger.payload_json.sender }}"
     cmd: "{{ trigger.payload_json.message | trim | upper }}"

@@ -26,7 +26,7 @@
   action:
     - action: script.send_sms
       data:
-        recipient: "+32456535814"
+        recipient: "+32476417968"
         message: >-
           ⚠️ Aquarium — pH BAS : {{ states('sensor.aquarium_ph') }}
           (seuil : 6.5) — {{ now().strftime('%H:%M') }}
@@ -51,7 +51,7 @@
   action:
     - action: script.send_sms
       data:
-        recipient: "+32456535814"
+        recipient: "+32476417968"
         message: >-
           ⚠️ Aquarium — pH HAUT : {{ states('sensor.aquarium_ph') }}
           (seuil : 8.0) — {{ now().strftime('%H:%M') }}
@@ -81,7 +81,7 @@
   action:
     - action: script.send_sms
       data:
-        recipient: "+32456535814"
+        recipient: "+32476417968"
         message: >-
           ⚠️ Aquarium — Température : {{ states('sensor.aquarium_temperature') }} °C
           (plage : 24–28 °C) — {{ now().strftime('%H:%M') }}
