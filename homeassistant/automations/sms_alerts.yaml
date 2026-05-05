@@ -1,24 +1,21 @@
-# Automations — Alertes aquarium par SMS
+# Automations — Alertes sécurité et statut système par SMS
 #
-# Installation :
-#   Copier ce fichier dans votre répertoire config/ HA et inclure dans automations.yaml :
-#     - !include automations/sms_alerts.yaml
-#   Ou importer depuis l'UI : Paramètres → Automations → Importer.
+# Ces automations envoient automatiquement des SMS vers +32476417968
+# lorsqu'un événement de sécurité ou un problème système est détecté.
 #
-# Adapter les entity_id à vos capteurs réels et le numéro de téléphone.
+# ADAPTER : remplacer les entity_id par vos entités réelles HA.
+# Le script send_sms est défini dans packages/sms_gateway.yaml.
 
 # ---------------------------------------------------------------------------
-# pH trop bas
+# Alarme intrusion déclenchée
 # ---------------------------------------------------------------------------
-- id: sms_alert_ph_low
-  alias: "SMS — Alerte pH bas aquarium"
-  description: "Envoie un SMS si le pH descend sous 6.5"
+- id: sms_alert_alarme_intrusion
+  alias: "SMS — Alarme intrusion déclenchée"
+  description: "Envoie un SMS si la centrale d'alarme se déclenche"
   trigger:
-    - platform: numeric_state
-      entity_id: sensor.aquarium_ph
-      below: 6.5
-      for:
-        minutes: 5  # évite les faux positifs sur un pic bref
+    - platform: state
+      entity_id: alarm_control_panel.home   # adapter à votre centrale
+      to: "triggered"
   condition:
     - condition: state
       entity_id: sensor.sms_gateway_etat
@@ -28,22 +25,79 @@
       data:
         recipient: "+32476417968"
         message: >-
-          ⚠️ Aquarium — pH BAS : {{ states('sensor.aquarium_ph') }}
-          (seuil : 6.5) — {{ now().strftime('%H:%M') }}
+          🚨 ALARME DÉCLENCHÉE — {{ now().strftime('%d/%m %H:%M') }}
+          Zone : {{ state_attr('alarm_control_panel.home', 'open_sensors') | default('inconnue') }}
   mode: single
 
 # ---------------------------------------------------------------------------
-# pH trop haut
+# Détection mouvement (hors présence)
 # ---------------------------------------------------------------------------
-- id: sms_alert_ph_high
-  alias: "SMS — Alerte pH haut aquarium"
-  description: "Envoie un SMS si le pH dépasse 8.0"
+- id: sms_alert_mouvement
+  alias: "SMS — Mouvement détecté"
+  description: "SMS si mouvement détecté alors que personne n'est censé être là"
   trigger:
-    - platform: numeric_state
-      entity_id: sensor.aquarium_ph
-      above: 8.0
+    - platform: state
+      entity_id: binary_sensor.motion_entree   # adapter
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: sensor.sms_gateway_etat
+      state: "online"
+    - condition: state
+      entity_id: alarm_control_panel.home      # seulement si alarme armée
+      state: "armed_away"
+  action:
+    - action: script.send_sms
+      data:
+        recipient: "+32476417968"
+        message: >-
+          ⚠️ Mouvement détecté — {{ now().strftime('%d/%m %H:%M') }}
+          Capteur : {{ state_attr('binary_sensor.motion_entree', 'friendly_name') }}
+  mode: single
+
+# ---------------------------------------------------------------------------
+# Porte / fenêtre ouverte (hors horaires)
+# ---------------------------------------------------------------------------
+- id: sms_alert_porte_ouverte
+  alias: "SMS — Porte ouverte hors horaires"
+  description: "SMS si une porte est ouverte la nuit ou en absence"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.porte_entree   # adapter
+      to: "on"
       for:
-        minutes: 5
+        minutes: 2
+  condition:
+    - condition: state
+      entity_id: sensor.sms_gateway_etat
+      state: "online"
+    - condition: or
+      conditions:
+        - condition: time
+          after: "23:00:00"
+          before: "06:00:00"
+        - condition: state
+          entity_id: alarm_control_panel.home
+          state: "armed_away"
+  action:
+    - action: script.send_sms
+      data:
+        recipient: "+32476417968"
+        message: >-
+          🚪 Porte ouverte — {{ now().strftime('%d/%m %H:%M') }}
+          {{ state_attr('binary_sensor.porte_entree', 'friendly_name') }} ouverte depuis 2 min.
+  mode: single
+
+# ---------------------------------------------------------------------------
+# Détection fumée / incendie
+# ---------------------------------------------------------------------------
+- id: sms_alert_fumee
+  alias: "SMS — Détection fumée"
+  description: "SMS immédiat si un détecteur de fumée s'active"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.fumee   # adapter — ou groupe de détecteurs
+      to: "on"
   condition:
     - condition: state
       entity_id: sensor.sms_gateway_etat
@@ -53,27 +107,22 @@
       data:
         recipient: "+32476417968"
         message: >-
-          ⚠️ Aquarium — pH HAUT : {{ states('sensor.aquarium_ph') }}
-          (seuil : 8.0) — {{ now().strftime('%H:%M') }}
+          🔥 FUMÉE DÉTECTÉE — {{ now().strftime('%d/%m %H:%M') }}
+          Vérifier immédiatement.
   mode: single
 
 # ---------------------------------------------------------------------------
-# Température hors plage
+# Coupure secteur (sur UPS ou détecteur de coupure)
 # ---------------------------------------------------------------------------
-- id: sms_alert_temp_aquarium
-  alias: "SMS — Alerte température aquarium"
-  description: "Envoie un SMS si la température sort de la plage 24–28 °C"
+- id: sms_alert_coupure_secteur
+  alias: "SMS — Coupure secteur"
+  description: "SMS si le secteur est coupé et le système tourne sur batterie"
   trigger:
-    - platform: numeric_state
-      entity_id: sensor.aquarium_temperature
-      below: 24
+    - platform: state
+      entity_id: binary_sensor.ups_on_battery   # adapter
+      to: "on"
       for:
-        minutes: 10
-    - platform: numeric_state
-      entity_id: sensor.aquarium_temperature
-      above: 28
-      for:
-        minutes: 10
+        minutes: 1
   condition:
     - condition: state
       entity_id: sensor.sms_gateway_etat
@@ -83,16 +132,16 @@
       data:
         recipient: "+32476417968"
         message: >-
-          ⚠️ Aquarium — Température : {{ states('sensor.aquarium_temperature') }} °C
-          (plage : 24–28 °C) — {{ now().strftime('%H:%M') }}
+          ⚡ Coupure secteur — {{ now().strftime('%d/%m %H:%M') }}
+          Système sur batterie. Vérifier l'alimentation.
   mode: single
 
 # ---------------------------------------------------------------------------
-# Passerelle SMS hors ligne
+# Passerelle SMS hors ligne (notification HA interne)
 # ---------------------------------------------------------------------------
 - id: sms_gateway_offline_notify
   alias: "SMS Gateway — Notification hors ligne"
-  description: "Alerte HA (notification interne) si la passerelle passe offline"
+  description: "Notification HA interne si la passerelle passe offline (pas de SMS possible)"
   trigger:
     - platform: state
       entity_id: sensor.sms_gateway_etat

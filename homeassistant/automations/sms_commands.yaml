@@ -1,12 +1,15 @@
 # Automations — Commandes SMS entrantes
 #
-# Permet de piloter Home Assistant en envoyant un SMS à la carte SIM.
-# Le message est reçu sur sms/incoming, puis dispatché par mot-clé.
+# Envoyer un SMS depuis +32476417968 vers la SIM de la gateway (+32456535814)
+# pour déclencher une action ou demander un statut.
+#
+# Seul le numéro +32476417968 est autorisé (condition de sécurité).
 #
 # Commandes disponibles (insensibles à la casse) :
-#   STATUS   → répond avec l'état du système
-#   POMPE ON / POMPE OFF → active/désactive la pompe aquarium
-#   LUMIERES ON / LUMIERES OFF → allume/éteint les lumières
+#   STATUS        → état général du système HA
+#   ALARME ON     → armer l'alarme (absent)
+#   ALARME OFF    → désarmer l'alarme
+#   ALARME NUIT   → armer l'alarme (nuit)
 
 - id: sms_command_dispatcher
   alias: "SMS — Dispatcher commandes entrantes"
@@ -33,62 +36,49 @@
               data:
                 recipient: "{{ sender }}"
                 message: >-
-                  HA OK — {{ now().strftime('%d/%m %H:%M') }}
-                  pH: {{ states('sensor.aquarium_ph') }}
-                  Temp: {{ states('sensor.aquarium_temperature') }} °C
-                  Pompe: {{ states('switch.pompe_aquarium') }}
+                  HA {{ now().strftime('%d/%m %H:%M') }}
+                  Alarme: {{ states('alarm_control_panel.home') }}
+                  Gateway: {{ states('sensor.sms_gateway_rssi') }} dBm
+                  Uptime: {{ (states('sensor.sms_gateway_uptime') | int // 3600) }}h
 
-        # ── POMPE ON ────────────────────────────────────────────────────────
+        # ── ALARME ON (absent) ───────────────────────────────────────────────
         - conditions:
             - condition: template
-              value_template: "{{ cmd == 'POMPE ON' }}"
+              value_template: "{{ cmd == 'ALARME ON' }}"
           sequence:
-            - action: switch.turn_on
+            - action: alarm_control_panel.alarm_arm_away
               target:
-                entity_id: switch.pompe_aquarium
+                entity_id: alarm_control_panel.home   # adapter
             - action: script.send_sms
               data:
                 recipient: "{{ sender }}"
-                message: "✅ Pompe aquarium allumée."
+                message: "✅ Alarme armée (absent) — {{ now().strftime('%H:%M') }}"
 
-        # ── POMPE OFF ───────────────────────────────────────────────────────
+        # ── ALARME OFF ───────────────────────────────────────────────────────
         - conditions:
             - condition: template
-              value_template: "{{ cmd == 'POMPE OFF' }}"
+              value_template: "{{ cmd == 'ALARME OFF' }}"
           sequence:
-            - action: switch.turn_off
+            - action: alarm_control_panel.alarm_disarm
               target:
-                entity_id: switch.pompe_aquarium
+                entity_id: alarm_control_panel.home   # adapter
             - action: script.send_sms
               data:
                 recipient: "{{ sender }}"
-                message: "✅ Pompe aquarium éteinte."
+                message: "✅ Alarme désarmée — {{ now().strftime('%H:%M') }}"
 
-        # ── LUMIERES ON ─────────────────────────────────────────────────────
+        # ── ALARME NUIT ──────────────────────────────────────────────────────
         - conditions:
             - condition: template
-              value_template: "{{ cmd == 'LUMIERES ON' }}"
+              value_template: "{{ cmd == 'ALARME NUIT' }}"
           sequence:
-            - action: light.turn_on
+            - action: alarm_control_panel.alarm_arm_night
               target:
-                entity_id: light.aquarium
+                entity_id: alarm_control_panel.home   # adapter
             - action: script.send_sms
               data:
                 recipient: "{{ sender }}"
-                message: "✅ Lumières aquarium allumées."
-
-        # ── LUMIERES OFF ────────────────────────────────────────────────────
-        - conditions:
-            - condition: template
-              value_template: "{{ cmd == 'LUMIERES OFF' }}"
-          sequence:
-            - action: light.turn_off
-              target:
-                entity_id: light.aquarium
-            - action: script.send_sms
-              data:
-                recipient: "{{ sender }}"
-                message: "✅ Lumières aquarium éteintes."
+                message: "✅ Alarme armée (nuit) — {{ now().strftime('%H:%M') }}"
 
         # ── Commande inconnue ────────────────────────────────────────────────
         default:
@@ -97,7 +87,7 @@
               recipient: "{{ sender }}"
               message: >-
                 Commande inconnue : "{{ trigger.payload_json.message }}"
-                Commandes : STATUS | POMPE ON/OFF | LUMIERES ON/OFF
+                Commandes : STATUS | ALARME ON | ALARME OFF | ALARME NUIT
 
   mode: queued
   max: 5
