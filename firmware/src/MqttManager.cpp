@@ -38,6 +38,18 @@ void MqttManager::begin() {
 }
 
 void MqttManager::loop() {
+    // WiFi recovery — retry every 30 s if connection dropped after boot
+    if (WiFi.status() != WL_CONNECTED) {
+        static unsigned long _lastWifiAttempt = 0;
+        unsigned long now = millis();
+        if (now - _lastWifiAttempt >= 30000UL) {
+            _lastWifiAttempt = now;
+            Serial.println(F("[WiFi] Reconnecting..."));
+            WiFi.reconnect();
+        }
+        return; // don't attempt MQTT while WiFi is down
+    }
+
     if (!_mqttClient.connected()) {
         static unsigned long _lastAttempt = 0;
         unsigned long now = millis();

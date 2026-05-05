@@ -20,7 +20,8 @@ mqtt:
       icon: mdi:cellphone-wireless
       availability:
         - topic: "sms/status"
-          payload_available: '{"state":"online"}'
+          payload_available: "online"
+          payload_not_available: "offline"
           value_template: "{{ value_json.state }}"
 
     - name: "SMS Gateway RSSI"
@@ -31,6 +32,11 @@ mqtt:
       device_class: signal_strength
       state_class: measurement
       icon: mdi:signal
+      availability:
+        - topic: "sms/status"
+          payload_available: "online"
+          payload_not_available: "offline"
+          value_template: "{{ value_json.state }}"
 
     - name: "SMS Gateway Uptime"
       unique_id: sms_gateway_uptime
@@ -38,18 +44,33 @@ mqtt:
       value_template: "{{ value_json.uptime_s }}"
       unit_of_measurement: "s"
       icon: mdi:timer-outline
+      availability:
+        - topic: "sms/status"
+          payload_available: "online"
+          payload_not_available: "offline"
+          value_template: "{{ value_json.state }}"
 
     - name: "Dernier SMS — Expéditeur"
       unique_id: sms_last_sender
       state_topic: "sms/incoming"
       value_template: "{{ value_json.sender }}"
       icon: mdi:phone-incoming
+      availability:
+        - topic: "sms/status"
+          payload_available: "online"
+          payload_not_available: "offline"
+          value_template: "{{ value_json.state }}"
 
     - name: "Dernier SMS — Message"
       unique_id: sms_last_message
       state_topic: "sms/incoming"
       value_template: "{{ value_json.message }}"
       icon: mdi:message-text
+      availability:
+        - topic: "sms/status"
+          payload_available: "online"
+          payload_not_available: "offline"
+          value_template: "{{ value_json.state }}"
 
 # ---------------------------------------------------------------------------
 # Script réutilisable — envoyer un SMS depuis n'importe quelle automation

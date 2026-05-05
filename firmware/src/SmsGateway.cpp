@@ -1,8 +1,12 @@
+#include <esp_task_wdt.h>
 #include <ArduinoJson.h>
 #include "SmsGateway.h"
 #include "config.h"
 
 void SmsGateway::begin() {
+    // Hardware watchdog: reset ESP32 if loop() freezes for more than 30 s
+    esp_task_wdt_init(30, true);
+    esp_task_wdt_add(NULL);
     // Register callbacks before begin() so no early event is missed
     _modem.onSmsReceived([this](const String& sender, const String& msg) {
         _onIncomingSms(sender, msg);
@@ -18,6 +22,7 @@ void SmsGateway::begin() {
 }
 
 void SmsGateway::loop() {
+    esp_task_wdt_reset(); // feed watchdog — must reach here within 30 s
     _ota.loop();   // highest priority — handle OTA before anything else
     _mqtt.loop();
     _modem.loop();
