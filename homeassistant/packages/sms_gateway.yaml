@@ -78,16 +78,20 @@ mqtt:
 script:
   send_sms:
     alias: "Envoyer un SMS"
-    description: "Publie sur sms/send pour déclencher l'envoi via la passerelle LilyGO"
+    description: >-
+      Publie sur sms/send pour déclencher l'envoi via la passerelle LilyGO.
+      Si recipient est omis, le firmware utilise DEFAULT_RECIPIENT (+32476417968).
     fields:
       recipient:
-        description: "Numéro de téléphone (format international)"
-        example: "+32499000000"
+        description: "Numéro de téléphone (format international) — optionnel, défaut +32476417968"
+        example: "+32476417968"
+        required: false
         selector:
           text:
       message:
         description: "Texte du SMS (max 160 caractères)"
-        example: "Alerte : pH trop bas !"
+        example: "Alerte : mouvement détecté !"
+        required: true
         selector:
           text:
             multiline: true
@@ -96,4 +100,4 @@ script:
         data:
           topic: "sms/send"
           payload: >-
-            {"recipient": "{{ recipient }}", "message": "{{ message }}"}
+            {"recipient": "{{ recipient | default('+32476417968') }}", "message": "{{ message }}"}

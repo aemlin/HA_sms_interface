@@ -93,7 +93,14 @@ void MqttManager::_onMessage(const char* topic, uint8_t* payload, unsigned int l
 
     JsonDocument doc;
     if (deserializeJson(doc, payload, length) != DeserializationError::Ok) return;
-    if (!doc["recipient"].is<const char*>() || !doc["message"].is<const char*>()) return;
+    if (!doc["message"].is<const char*>()) return;
 
-    _sendCb(doc["recipient"].as<String>(), doc["message"].as<String>());
+    // "recipient" is optional — fall back to DEFAULT_RECIPIENT if absent or empty
+    const char* recipient = doc["recipient"] | DEFAULT_RECIPIENT;
+    if (!recipient || strlen(recipient) == 0) {
+        Serial.println(F("[MQTT] sms/send: no recipient and no DEFAULT_RECIPIENT configured"));
+        return;
+    }
+
+    _sendCb(String(recipient), doc["message"].as<String>());
 }

@@ -65,6 +65,11 @@
 #define SIM_PIN ""
 #endif
 
+// Default SMS recipient — used when sms/send MQTT payload has no "recipient" field
+#ifndef DEFAULT_RECIPIENT
+#define DEFAULT_RECIPIENT ""
+#endif
+
 // Heartbeat interval in seconds (default 60 s)
 #ifndef HEARTBEAT_INTERVAL
 #define HEARTBEAT_INTERVAL 60
