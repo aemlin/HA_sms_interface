@@ -18,4 +18,6 @@ private:
 
     void _connect();
     void _onMessage(const char* topic, uint8_t* payload, unsigned int length);
+
+    friend void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
 };
